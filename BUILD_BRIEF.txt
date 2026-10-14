@@ -1,0 +1,25 @@
+BUILD BRIEF — stripe-webhook-idempotency (proof-of-work artifact for a Stripe-style interview bar: money movement "exactly correct, idempotent, auditable and fast")
+
+You are building a small Python project in the CURRENT directory with full TDD discipline. Read PLAN.md in this directory first — it is the locked scope.
+
+WHAT TO BUILD
+1. Webhook receiver module with Stripe-style signature verification in TEST MODE ONLY (no real keys, no real Stripe, no network). Parse a Stripe-Signature style header "t=<unix_ts>,v1=<hmac_hex>", compute HMAC-SHA256 over "<ts>.<raw_body>" using a webhook secret supplied via env var (tests generate a random one locally at runtime), verify with constant-time comparison, reject stale timestamps beyond a configurable tolerance (default 300s) to kill replay attacks.
+2. Idempotent ledger in SQLite: record_event(event_id, idempotency_key, type, payload) returns "applied" or "duplicate". The same idempotency key arriving twice, out of order, or redelivered must produce exactly ONE ledger entry. Reconciliation logic must handle: duplicate delivery, out-of-order events for the same payment, replayed signatures (same payload re-sent with old timestamp), and distinct keys mapping to distinct entries. Every decision must be auditable: ledger rows store event_id, idempotency key, event type, payload hash, received-at, first-applied-at, and outcome (applied/duplicate/rejected with reason).
+3. TDD: write the test suite FIRST (pytest), watch it fail, then implement. Cover at minimum: valid signature accepted; invalid signature rejected; tampered payload rejected; stale timestamp rejected (replay); missing header rejected; malformed header rejected; duplicate delivery collapses to one ledger entry; out-of-order events reconcile to one entry; replay attack (old ts, valid sig) rejected; missing idempotency key handled safely; distinct keys give distinct entries. Every test must be a real test — no placeholders.
+4. scripts/redelivery_storm.py: a redelivery-storm script that fires N webhook deliveries (mix of duplicates, replay attempts, and out-of-order events) at the ledger and prints measured results: total deliveries sent, unique idempotency keys, ledger entries created, duplicates collapsed, rejections. The invariant: ledger entries == unique idempotency keys, every time.
+5. requirements: pytest only. Keep the package stdlib-only otherwise (hmac, hashlib, sqlite3). Fast, no network.
+
+DELIVERABLES IN THIS DIRECTORY
+- src/ package (e.g. webhook_verifier.py, ledger.py, receiver.py) or a single well-organized package
+- tests/ with the full pytest suite
+- scripts/redelivery_storm.py
+- README.md: what it does, how to run, the REAL test count (run pytest and count), and the REAL measured storm metrics (run the storm script and copy the numbers)
+- RESULTS.md: pytest output summary and storm output pasted from real runs
+
+CONSTRAINTS
+- NEVER touch real Stripe or real money. No API keys anywhere. The test-mode secret is generated at runtime in tests, never committed.
+- No frontend, no DB beyond SQLite.
+- Every metric in README/RESULTS must be measured from a real run, never estimated or invented.
+- Run pytest yourself at the end until fully green, and run the storm script yourself. Report the exact test count (e.g. 24/24) and storm numbers back in your final summary.
+
+Work autonomously: tests first, then code, run pytest, iterate until green, write README + RESULTS with real numbers. Go.
